@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive 3D Bloch Sphere</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+        }
+        .label {
+            color: #cbd5e1; /* slate-300 */
+            font-size: 16px;
+            text-shadow: 0 0 5px rgba(0,0,0,0.5);
+            position: absolute;
+            top: 0;
+            left: 0;
+            cursor: default;
+            user-select: none;
+            text-align: center;
+        }
+        .state-label {
+            color: #94a3b8; /* slate-400 */
+            font-family: monospace;
+            font-size: 12px;
+            text-shadow: 0 0 5px rgba(0,0,0,0.5);
+            position: absolute;
+            top: 0;
+            left: 0;
+            cursor: default;
+            user-select: none;
+            background-color: rgba(30, 41, 59, 0.5);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        .control-panel {
+            background-color: #1e293b; /* slate-800 */
+            border-left: 1px solid #334155; /* slate-700 */
+        }
+        .control-section {
+            background-color: rgba(255, 255, 255, 0.03);
+            border: 1px solid #334155; /* slate-700 */
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .control-title {
+            color: #94a3b8; /* slate-400 */
+            font-weight: 500;
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-size: 0.875rem;
+        }
+        .gate-btn {
+            transition: all 0.2s ease-in-out;
+            background-color: #334155; /* slate-700 */
+        }
+        .gate-btn:hover {
+            background-color: #475569; /* slate-600 */
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0, 255, 255, 0.1);
+        }
+        input[type="number"] { -moz-appearance: textfield; }
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        #info-modal { transition: opacity 0.3s ease; }
+        #info-modal-content { transition: transform 0.3s ease; }
+    </style>
+</head>
+<body class="bg-gray-900 text-slate-200 flex flex-col md:flex-row h-screen w-screen">
+
+    <!-- 3D Canvas -->
+    <div id="canvas-container" class="flex-grow h-full w-full md:w-3/4 relative"></div>
+
+    <!-- Controls Panel -->
+    <div class="w-full md:w-1/4 control-panel p-6 overflow-y-auto h-full shadow-lg">
+        <div class="flex items-center mb-8">
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-cyan-400 mr-3"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+            <h1 class="text-2xl font-bold text-slate-100">Bloch Sphere</h1>
+        </div>
+        
+        <div class="control-section">
+            <h2 class="control-title">1-Qubit Gates (on Q0)</h2>
+            <div class="grid grid-cols-4 gap-2 text-sm">
+                <button class="gate-btn rounded p-2" data-gate="I" title="Identity">I</button>
+                <button class="gate-btn rounded p-2" data-gate="H" title="Hadamard">H</button>
+                <button class="gate-btn rounded p-2" data-gate="X" title="Pauli-X (NOT)">X</button>
+                <button class="gate-btn rounded p-2" data-gate="Y" title="Pauli-Y">Y</button>
+                <button class="gate-btn rounded p-2" data-gate="Z" title="Pauli-Z">Z</button>
+                <button class="gate-btn rounded p-2" data-gate="S" title="Phase (S)">S</button>
+                <button class="gate-btn rounded p-2" data-gate="T" title="T Gate">T</button>
+                <button class="gate-btn rounded p-2" data-gate="S_DAG" title="S Dagger">S†</button>
+                <button class="gate-btn rounded p-2" data-gate="T_DAG" title="T Dagger">T†</button>
+                <button class="gate-btn rounded p-2" data-gate="SQRT_X" title="√X">√X</button>
+                <button class="gate-btn rounded p-2" data-gate="SQRT_Y" title="√Y">√Y</button>
+                <button class="gate-btn rounded p-2" data-gate="SQRT_Z" title="√Z">√Z</button>
+            </div>
+        </div>
+
+        <div class="control-section">
+            <h2 class="control-title">Rotation Gates (on Q0)</h2>
+            <div class="flex items-center space-x-2 mb-3">
+                <span>θ = </span>
+                <input type="range" id="theta-slider" min="-360" max="360" value="90" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+                <span id="theta-value" class="font-mono w-12 text-right">90°</span>
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+                <button class="gate-btn rounded p-2" id="rx-gate">Rx(θ)</button>
+                <button class="gate-btn rounded p-2" id="ry-gate">Ry(θ)</button>
+                <button class="gate-btn rounded p-2" id="rz-gate">Rz(θ)</button>
+            </div>
+        </div>
+
+        <div class="control-section">
+            <h2 class="control-title">Multi-Qubit Gates</h2>
+             <div class="bg-slate-900/50 text-slate-400 text-xs p-2 rounded-md mb-3 border border-slate-700">
+                <b>Note:</b> This is a conceptual aid. It shows conditional logic, not true entanglement.
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <button class="gate-btn rounded p-2" data-multi-qubit="CNOT">CNOT</button>
+                <button class="gate-btn rounded p-2" data-multi-qubit="CZ">CZ</button>
+                <button class="gate-btn rounded p-2" data-multi-qubit="SWAP">SWAP</button>
+                <button class="gate-btn rounded p-2" data-multi-qubit="TOFFOLI">Toffoli</button>
+            </div>
+            <button id="collapse-view-btn" class="w-full mt-4 bg-cyan-700 hover:bg-cyan-600 text-white rounded-lg py-2 font-bold transition-all transform hover:scale-105 hidden">Return to 1-Qubit View</button>
+        </div>
+        
+        <div class="control-section">
+            <h2 class="control-title">Reset Qubits</h2>
+             <button id="reset-vector" class="w-full bg-slate-700 hover:bg-red-600 text-slate-300 hover:text-white rounded-lg py-2 font-bold transition-all transform hover:scale-105">Reset All to |0⟩</button>
+        </div>
+    </div>
+
+    <!-- Info Modal -->
+    <div id="info-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 opacity-0 pointer-events-none">
+        <div id="info-modal-content" class="bg-slate-800 rounded-xl p-6 border border-slate-700 shadow-2xl w-full max-w-md transform scale-95">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="modal-title" class="text-xl font-bold text-cyan-400">Gate Info</h3>
+                <button id="modal-close-btn" class="text-slate-400 hover:text-white text-3xl leading-none">&times;</button>
+            </div>
+            <p id="modal-text" class="text-slate-300"></p>
+        </div>
+    </div>
+
+    <!-- Library Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js"></script>
+
+    <script>
+    (() => {
+        // --- Basic Setup ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setClearColor(0x0f172a, 1);
+        container.appendChild(renderer.domElement);
+        const labelRenderer = new THREE.CSS2DRenderer();
+        labelRenderer.setSize(container.clientWidth, container.clientHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        container.appendChild(labelRenderer.domElement);
+        const controls = new THREE.OrbitControls(camera, labelRenderer.domElement);
+        controls.enableDamping = true;
+        controls.minDistance = 2;
+        controls.maxDistance = 30;
+
+        // --- Lighting & Scene ---
+        scene.add(new THREE.HemisphereLight(0xffffff, 0x333333, 1.5));
+        const pointLight = new THREE.PointLight(0xffffff, 1.5, 100);
+        pointLight.position.set(5, 5, 5);
+        scene.add(pointLight);
+        const starVertices = [];
+        for (let i = 0; i < 10000; i++) starVertices.push(THREE.MathUtils.randFloatSpread(200));
+        const starGeometry = new THREE.BufferGeometry();
+        starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+        const stars = new THREE.Points(starGeometry, new THREE.PointsMaterial({ color: 0x888888, size: 0.1 }));
+        scene.add(stars);
+
+        // --- Complex Number Logic ---
+        class Complex {
+            constructor(r, i) { this.real = r || 0; this.imag = i || 0; }
+            add(o) { return new Complex(this.real + o.real, this.imag + o.imag); }
+            multiply(o) { return new Complex(this.real * o.real - this.imag * o.imag, this.real * o.imag + this.imag * o.real); }
+        }
+
+        // --- Create a Qubit (Sphere + Vector) ---
+        function createQubit(radius, position, label) {
+            const qubitGroup = new THREE.Group();
+            qubitGroup.position.copy(position);
+            scene.add(qubitGroup);
+
+            const sphere = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 32), new THREE.MeshStandardMaterial({ color: 0x67e8f9, transparent: true, opacity: 0.1, metalness: 0.8, roughness: 0.2, side: THREE.DoubleSide }));
+            qubitGroup.add(sphere);
+
+            const gridGroup = new THREE.Group();
+            const lineMaterial = new THREE.LineBasicMaterial({ color: 0x334155, transparent: true, opacity: 0.5 });
+            const equatorMaterial = new THREE.LineBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.8 });
+            for (let i = 1; i <= 4; i++) {
+                const latAngle = (i / 5) * (Math.PI / 2);
+                const r = radius * Math.cos(latAngle);
+                const y = radius * Math.sin(latAngle);
+                const geometry = new THREE.BufferGeometry().setFromPoints(new THREE.Path().absarc(0, 0, r, 0, Math.PI * 2, false).getPoints(64));
+                const upperLine = new THREE.Line(geometry, lineMaterial);
+                upperLine.rotation.x = Math.PI / 2;
+                upperLine.position.y = y;
+                gridGroup.add(upperLine);
+                const lowerLine = new THREE.Line(geometry.clone(), lineMaterial);
+                lowerLine.rotation.x = Math.PI / 2;
+                lowerLine.position.y = -y;
+                gridGroup.add(lowerLine);
+            }
+            const meridianPoints = [];
+            for (let j = 0; j <= 128; j++) {
+                const angle = (j / 128) * Math.PI * 2;
+                meridianPoints.push(new THREE.Vector3(0, radius * Math.cos(angle), radius * Math.sin(angle)));
+            }
+            const meridianGeometry = new THREE.BufferGeometry().setFromPoints(meridianPoints);
+            for (let i = 0; i < 8; i++) {
+                const meridian = new THREE.Line(meridianGeometry, lineMaterial);
+                meridian.rotation.y = (i / 8) * Math.PI;
+                gridGroup.add(meridian);
+            }
+            const equator = new THREE.Line(new THREE.BufferGeometry().setFromPoints(new THREE.Path().absarc(0, 0, radius, 0, Math.PI * 2, false).getPoints(128)), equatorMaterial);
+            equator.rotation.x = Math.PI / 2;
+            gridGroup.add(equator);
+            qubitGroup.add(gridGroup);
+            
+            const mainLabelDiv = document.createElement('div');
+            mainLabelDiv.className = 'label';
+            mainLabelDiv.textContent = label;
+            const mainLabel = new THREE.CSS2DObject(mainLabelDiv);
+            mainLabel.position.set(0, radius + 0.4, 0);
+            qubitGroup.add(mainLabel);
+
+            const stateLabelDiv = document.createElement('div');
+            stateLabelDiv.className = 'state-label';
+            const stateLabel = new THREE.CSS2DObject(stateLabelDiv);
+            stateLabel.position.set(0, radius + 0.7, 0);
+            qubitGroup.add(stateLabel);
+
+            let vectorState = { theta: 0, phi: 0 };
+            const vectorMaterial = new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xcc8c00, metalness: 0.5, roughness: 0.4 });
+            const tailMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.02 * radius, 0.02 * radius, radius * 0.98, 12), vectorMaterial);
+            tailMesh.position.y = (radius * 0.98) / 2;
+            const headMesh = new THREE.Mesh(new THREE.ConeGeometry(0.06 * radius, 0.25 * radius, 12), vectorMaterial);
+            headMesh.position.y = radius * 0.98;
+            const stateVector = new THREE.Group();
+            stateVector.add(tailMesh, headMesh);
+            qubitGroup.add(stateVector);
+
+            function formatComplex(c) {
+                if (Math.abs(c.real) < 1e-6 && Math.abs(c.imag) < 1e-6) return "0.00";
+                const realPart = c.real.toFixed(2);
+                const imagPart = Math.abs(c.imag).toFixed(2);
+                if (Math.abs(c.imag) < 1e-6) return realPart;
+                if (Math.abs(c.real) < 1e-6) return `${c.imag < 0 ? '-' : ''}${imagPart}i`;
+                return `(${realPart} ${c.imag < 0 ? '-' : '+'} ${imagPart}i)`;
+            }
+
+            function updateVectorPosition(theta, phi) {
+                const targetDirection = new THREE.Vector3(Math.sin(theta) * Math.cos(phi), Math.cos(theta), Math.sin(theta) * Math.sin(phi)).normalize();
+                stateVector.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), targetDirection);
+                const alpha = new Complex(Math.cos(theta/2), 0);
+                const beta = new Complex(Math.sin(theta/2) * Math.cos(phi), Math.sin(theta/2) * Math.sin(phi));
+                stateLabelDiv.innerHTML = `|ψ⟩=${formatComplex(alpha)}|0⟩+${formatComplex(beta)}|1⟩`;
+            }
+            
+            return { group: qubitGroup, state: vectorState, update: updateVectorPosition };
+        }
+
+        const qubits = [
+            createQubit(1.5, new THREE.Vector3(0, 0, 0), "Q0 (Control)"),
+            createQubit(1.0, new THREE.Vector3(3, 0, 0), "Q1 (Control/Target)"),
+            createQubit(1.0, new THREE.Vector3(6, 0, 0), "Q2 (Target)")
+        ];
+        
+        qubits.forEach(q => q.update(q.state.theta, q.state.phi));
+
+        qubits[1].group.visible = false;
+        qubits[2].group.visible = false;
+
+        // --- Camera and View State ---
+        let currentView = 'single';
+        const collapseBtn = document.getElementById('collapse-view-btn');
+        const cameraPositions = {
+            single: { pos: new THREE.Vector3(0, 0, 3.5), target: new THREE.Vector3(0,0,0) },
+            dual: { pos: new THREE.Vector3(1.5, 1, 5), target: new THREE.Vector3(1.5,0,0) },
+            triple: { pos: new THREE.Vector3(3, 1.5, 7), target: new THREE.Vector3(3,0,0) }
+        };
+        camera.position.copy(cameraPositions.single.pos);
+        controls.target.copy(cameraPositions.single.target);
+
+        function transitionView(view) {
+            if (currentView === view && view !== 'single') return;
+            currentView = view;
+            const target = cameraPositions[view];
+            collapseBtn.style.display = view !== 'single' ? 'block' : 'none';
+
+            new TWEEN.Tween(camera.position).to(target.pos, 800).easing(TWEEN.Easing.Quadratic.InOut).start();
+            new TWEEN.Tween(controls.target).to(target.target, 800).easing(TWEEN.Easing.Quadratic.InOut).start();
+
+            new TWEEN.Tween(qubits[0].group.position).to({ x: view === 'single' ? 0 : (view === 'dual' ? -2.5 : -4) }, 800).easing(TWEEN.Easing.Quadratic.InOut).start();
+            
+            qubits[1].group.visible = true;
+            new TWEEN.Tween(qubits[1].group.position).to({ x: view === 'single' ? 3 : (view === 'dual' ? 2.5 : 0) }, 800).easing(TWEEN.Easing.Quadratic.InOut).start();
+            new TWEEN.Tween(qubits[1].group.scale).to({ x: view !== 'single' ? 1 : 0.01, y: view !== 'single' ? 1 : 0.01, z: view !== 'single' ? 1 : 0.01 }, 800)
+                .easing(TWEEN.Easing.Quadratic.InOut).onComplete(() => { if (view === 'single') qubits[1].group.visible = false; }).start();
+            
+            qubits[2].group.visible = true;
+            new TWEEN.Tween(qubits[2].group.position).to({ x: view === 'triple' ? 4 : 6 }, 800).easing(TWEEN.Easing.Quadratic.InOut).start();
+            new TWEEN.Tween(qubits[2].group.scale).to({ x: view === 'triple' ? 1 : 0.01, y: view === 'triple' ? 1 : 0.01, z: view === 'triple' ? 1 : 0.01 }, 800)
+                .easing(TWEEN.Easing.Quadratic.InOut).onComplete(() => { if (view !== 'triple') qubits[2].group.visible = false; }).start();
+        }
+
+        // --- Interaction Beams ---
+        const beamMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff, transparent: true, opacity: 0 });
+        const beams = [new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1, 8), beamMaterial.clone()), new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1, 8), beamMaterial.clone())];
+        beams.forEach(b => scene.add(b));
+        
+        function fireBeam(startQubit, endQubit, beamIndex) {
+            const beam = beams[beamIndex];
+            const start = startQubit.group.position;
+            const end = endQubit.group.position;
+            const distance = start.distanceTo(end);
+            beam.scale.y = distance;
+            beam.position.copy(start).lerp(end, 0.5);
+            beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), end.clone().sub(start).normalize());
+            new TWEEN.Tween(beam.material).to({ opacity: 0.7 }, 200).yoyo(true).repeat(1).easing(TWEEN.Easing.Cubic.InOut).start();
+        }
+
+        function applyMatrix(matrix, qubit) {
+            const alpha = new Complex(Math.cos(qubit.state.theta / 2), 0);
+            const beta = new Complex(Math.sin(qubit.state.theta / 2) * Math.cos(qubit.state.phi), Math.sin(qubit.state.theta / 2) * Math.sin(qubit.state.phi));
+            const newAlpha = matrix[0][0].multiply(alpha).add(matrix[0][1].multiply(beta));
+            const newBeta = matrix[1][0].multiply(alpha).add(matrix[1][1].multiply(beta));
+            const newAlphaAbs = Math.sqrt(newAlpha.real**2 + newAlpha.imag**2);
+            const acosArg = Math.max(-1, Math.min(1, newAlphaAbs));
+            let newTheta = 2 * Math.acos(acosArg);
+            let newPhi = (newAlphaAbs < 1e-9 || newAlphaAbs > 1 - 1e-9) ? 0 : Math.atan2(newBeta.imag, newBeta.real) - Math.atan2(newAlpha.imag, newAlpha.real);
+            new TWEEN.Tween(qubit.state).to({ theta: newTheta, phi: newPhi }, 700).easing(TWEEN.Easing.Exponential.Out).onUpdate(() => qubit.update(qubit.state.theta, qubit.state.phi)).start();
+        }
+        
+        // --- Gate Definitions ---
+        const i = new Complex(0, 1);
+        const gates = {
+            I: [[new Complex(1,0), new Complex(0,0)], [new Complex(0,0), new Complex(1,0)]],
+            H: [[new Complex(1/Math.sqrt(2),0), new Complex(1/Math.sqrt(2),0)], [new Complex(1/Math.sqrt(2),0), new Complex(-1/Math.sqrt(2),0)]],
+            X: [[new Complex(0,0), new Complex(1,0)], [new Complex(1,0), new Complex(0,0)]],
+            Y: [[new Complex(0,0), new Complex(0,-1)], [new Complex(0,1), new Complex(0,0)]],
+            Z: [[new Complex(1,0), new Complex(0,0)], [new Complex(0,0), new Complex(-1,0)]],
+            S: [[new Complex(1,0), new Complex(0,0)], [new Complex(0,0), i]],
+            T: [[new Complex(1,0), new Complex(0,0)], [new Complex(0,0), new Complex(Math.cos(Math.PI/4), Math.sin(Math.PI/4))]],
+            S_DAG: [[new Complex(1,0), new Complex(0,0)], [new Complex(0,0), new Complex(0,-1)]],
+            T_DAG: [[new Complex(1,0), new Complex(0,0)], [new Complex(0,0), new Complex(Math.cos(-Math.PI/4), Math.sin(-Math.PI/4))]],
+            SQRT_X: [[new Complex(0.5, 0.5), new Complex(0.5, -0.5)], [new Complex(0.5, -0.5), new Complex(0.5, 0.5)]],
+            SQRT_Y: [[new Complex(0.5, 0.5), new Complex(-0.5, -0.5)], [new Complex(0.5, 0.5), new Complex(0.5, 0.5)]],
+            SQRT_Z: [[new Complex(1,0), new Complex(0,0)], [new Complex(0,0), new Complex(1/Math.sqrt(2), 1/Math.sqrt(2))]]
+        };
+
+        // --- Event Listeners ---
+        document.querySelectorAll('.gate-btn[data-gate]').forEach(button => button.addEventListener('click', (e) => applyMatrix(gates[e.target.dataset.gate], qubits[0])));
+        const thetaSlider = document.getElementById('theta-slider');
+        const thetaValue = document.getElementById('theta-value');
+        thetaSlider.addEventListener('input', () => thetaValue.textContent = `${thetaSlider.value}°`);
+        document.getElementById('rx-gate').addEventListener('click', () => {
+            const t = parseFloat(thetaSlider.value) * Math.PI / 180;
+            applyMatrix([[new Complex(Math.cos(t/2),0), new Complex(0,-Math.sin(t/2))], [new Complex(0,-Math.sin(t/2)), new Complex(Math.cos(t/2),0)]], qubits[0]);
+        });
+        document.getElementById('ry-gate').addEventListener('click', () => {
+            const t = parseFloat(thetaSlider.value) * Math.PI / 180;
+            applyMatrix([[new Complex(Math.cos(t/2),0), new Complex(-Math.sin(t/2),0)], [new Complex(Math.sin(t/2),0), new Complex(Math.cos(t/2),0)]], qubits[0]);
+        });
+        document.getElementById('rz-gate').addEventListener('click', () => {
+            const t = parseFloat(thetaSlider.value) * Math.PI / 180;
+            applyMatrix([[new Complex(Math.cos(-t/2), Math.sin(-t/2)), new Complex(0,0)], [new Complex(0,0), new Complex(Math.cos(t/2), Math.sin(t/2))]], qubits[0]);
+        });
+        document.getElementById('reset-vector').addEventListener('click', () => {
+             transitionView('single');
+             qubits.forEach(q => {
+                 new TWEEN.Tween(q.state).to({ theta: 0, phi: 0 }, 700).easing(TWEEN.Easing.Exponential.Out).onUpdate(() => q.update(q.state.theta, q.state.phi)).start();
+             });
+        });
+        collapseBtn.addEventListener('click', () => transitionView('single'));
+
+        // Multi-Qubit Gate Listeners
+        document.querySelectorAll('.gate-btn[data-multi-qubit]').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const gateType = e.target.dataset.multiQubit;
+                let requiredView = 'dual';
+                if (gateType === 'TOFFOLI') requiredView = 'triple';
+                
+                transitionView(requiredView);
+
+                setTimeout(() => {
+                    if (gateType === 'CNOT' && qubits[0].state.theta > Math.PI / 2) {
+                        fireBeam(qubits[0], qubits[1], 0);
+                        applyMatrix(gates.X, qubits[1]);
+                    } else if (gateType === 'CZ' && qubits[0].state.theta > Math.PI / 2) {
+                        fireBeam(qubits[0], qubits[1], 0);
+                        applyMatrix(gates.Z, qubits[1]);
+                    } else if (gateType === 'SWAP') {
+                        fireBeam(qubits[0], qubits[1], 0);
+                        const q0State = { ...qubits[0].state };
+                        const q1State = { ...qubits[1].state };
+                        new TWEEN.Tween(qubits[0].state).to(q1State, 700).easing(TWEEN.Easing.Exponential.Out).onUpdate(() => qubits[0].update(qubits[0].state.theta, qubits[0].state.phi)).start();
+                        new TWEEN.Tween(qubits[1].state).to(q0State, 700).easing(TWEEN.Easing.Exponential.Out).onUpdate(() => qubits[1].update(qubits[1].state.theta, qubits[1].state.phi)).start();
+                    } else if (gateType === 'TOFFOLI' && qubits[0].state.theta > Math.PI / 2 && qubits[1].state.theta > Math.PI / 2) {
+                        fireBeam(qubits[0], qubits[2], 0);
+                        fireBeam(qubits[1], qubits[2], 1);
+                        applyMatrix(gates.X, qubits[2]);
+                    }
+                }, currentView === requiredView ? 0 : 800);
+            });
+        });
+
+        // --- Modal Logic ---
+        const modal = document.getElementById('info-modal');
+        const modalContent = document.getElementById('info-modal-content');
+        const modalTitle = document.getElementById('modal-title');
+        const modalText = document.getElementById('modal-text');
+        const modalCloseBtn = document.getElementById('modal-close-btn');
+        const infoTexts = { SWAP: "The SWAP gate exchanges the states of two qubits." };
+        document.querySelectorAll('.gate-btn[data-info]').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const key = e.target.dataset.info;
+                modalTitle.textContent = `${key} Gate`;
+                modalText.textContent = infoTexts[key];
+                modal.classList.remove('opacity-0', 'pointer-events-none');
+                modalContent.classList.remove('scale-95');
+            });
+        });
+        const closeModal = () => {
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            modalContent.classList.add('scale-95');
+        };
+        modalCloseBtn.addEventListener('click', closeModal);
+        modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+        // --- Animation Loop ---
+        function animate(time) {
+            requestAnimationFrame(animate);
+            controls.update();
+            TWEEN.update(time);
+            stars.rotation.y += 0.0001;
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+        animate();
+    })();
+    </script>
+</body>
+</html>
